@@ -19,6 +19,13 @@ const EpubReader: React.FC = () => {
   // State for settings modal
   const [showSettings, setShowSettings] = useState<boolean>(false);
 
+  // State for TOC modal
+  const [showTOC, setShowTOC] = useState<boolean>(false);
+  const [toc, setToc] = useState<any[]>([]);
+
+  // Ref to store the current chapter element
+  const currentChapterRef = useRef<HTMLButtonElement | null>(null);
+
   // Load stored settings on component mount
   useEffect(() => {
     // Retrieve settings from localStorage
@@ -67,9 +74,7 @@ const EpubReader: React.FC = () => {
         width: "100%",
         height: "100%",
         flow: "scrolled",
-        // view: "inline",
         view: InlineView,
-
         manager: "default",
       });
       renditionRef.current = rendition;
@@ -79,20 +84,9 @@ const EpubReader: React.FC = () => {
       console.log("🚀 ~ useEffect ~ savedLocation:", savedLocation);
 
       changeChapter(savedLocation);
-      // if (savedLocation) {
-      //   rendition.display(savedLocation);
-      // } else {
-      //   rendition.display();
-      // }
 
       applyContentStyles();
       applyTheme();
-
-      // Listen for location changes
-      // rendition.on("relocated", (location) => {
-      //   // Save the current location
-      //   localStorage.setItem(`epub-location-${epubKey}`, location.start.cfi);
-      // });
     }
   }, [book, epubKey]);
 
@@ -112,7 +106,6 @@ const EpubReader: React.FC = () => {
 
   const nextChapter = () => {
     if (!renditionRef.current) return;
-    // renditionRef.current.prev();
     const nextRef = getNextHref(
       getCurrentChapter(),
       renditionRef.current.book.navigation.toc
@@ -123,12 +116,11 @@ const EpubReader: React.FC = () => {
 
   const prevChapter = () => {
     if (!renditionRef.current) return;
-    // renditionRef.current.prev();
-    const nextRef = getPrevHref(
+    const prevRef = getPrevHref(
       getCurrentChapter(),
       renditionRef.current.book.navigation.toc
     );
-    changeChapter(nextRef);
+    changeChapter(prevRef);
   };
 
   function getNextHref(currentHref, chapters) {
@@ -143,9 +135,10 @@ const EpubReader: React.FC = () => {
         return chapters[currentIndex].href;
       }
     } else {
-      return chapters[1].href;
+      return chapters[0].href;
     }
   }
+
   function getPrevHref(currentHref, chapters) {
     const currentIndex = chapters.findIndex(
       (chapter) => chapter.href === currentHref
@@ -244,6 +237,64 @@ const EpubReader: React.FC = () => {
       setBook(null);
       setEpubKey("");
     }
+  };
+
+  // Recursive function to render TOC items
+  const renderTOCItems = (items) => {
+    const currentHref = getCurrentChapter();
+
+    return items.map((item) => {
+      const isActive = item.href === currentHref;
+      const itemRef = isActive ? currentChapterRef : null;
+
+      return (
+        <li key={item.href} style={{ marginBottom: "10px" }}>
+          <button
+            ref={itemRef}
+            onClick={() => {
+              changeChapter(item.href);
+              setShowTOC(false);
+            }}
+            style={{
+              background: "none",
+              border: "none",
+              color: isActive ? "#FFD700" : "#2196F3", // Highlight current chapter
+              cursor: "pointer",
+              textAlign: "left",
+              width: "100%",
+              fontSize: "16px",
+              fontWeight: isActive ? "bold" : "normal",
+            }}
+          >
+            {item.label}
+          </button>
+          {item.subitems && item.subitems.length > 0 && (
+            <ul style={{ listStyleType: "none", paddingLeft: "20px" }}>
+              {renderTOCItems(item.subitems)}
+            </ul>
+          )}
+        </li>
+      );
+    });
+  };
+
+  // Auto-scroll to current chapter when TOC is opened
+  useEffect(() => {
+    if (showTOC && currentChapterRef.current) {
+      currentChapterRef.current.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      });
+    }
+  }, [showTOC]);
+
+  // Close TOC when clicking outside
+  const handleTOCOverlayClick = () => {
+    setShowTOC(false);
+  };
+
+  const handleTOCContentClick = (e) => {
+    e.stopPropagation();
   };
 
   return (
@@ -347,6 +398,17 @@ const EpubReader: React.FC = () => {
             <button onClick={prevChapter} style={navButtonStyle}>
               Previous Chapter
             </button>
+            <button
+              onClick={() => {
+                if (renditionRef.current) {
+                  setToc(renditionRef.current.book.navigation.toc);
+                }
+                setShowTOC(true);
+              }}
+              style={navButtonStyle}
+            >
+              TOC
+            </button>
             <button onClick={nextChapter} style={navButtonStyle}>
               Next Chapter
             </button>
@@ -366,6 +428,56 @@ const EpubReader: React.FC = () => {
               Close Book
             </button>
           </div>
+          {/* TOC Modal */}
+          {showTOC && (
+            <div
+              onClick={handleTOCOverlayClick}
+              style={{
+                position: "fixed",
+                top: 0,
+                left: 0,
+                width: "100vw",
+                height: "100vh",
+                backgroundColor: "rgba(0, 0, 0, 0.7)",
+                display: "flex",
+                justifyContent: "center",
+                alignItems: "center",
+                zIndex: 1000,
+              }}
+            >
+              <div
+                onClick={handleTOCContentClick}
+                style={{
+                  background: "#1E1E1E",
+                  padding: "20px",
+                  borderRadius: "5px",
+                  width: "90%",
+                  maxWidth: "500px",
+                  color: "#ffffff",
+                  maxHeight: "80vh",
+                  overflowY: "auto",
+                }}
+              >
+                <h2>Table of Contents</h2>
+                <ul style={{ listStyleType: "none", padding: 0 }}>
+                  {renderTOCItems(toc)}
+                </ul>
+                <button
+                  onClick={() => setShowTOC(false)}
+                  style={{
+                    marginTop: "10px",
+                    padding: "5px 10px",
+                    backgroundColor: "#424242",
+                    color: "#ffffff",
+                    border: "none",
+                    borderRadius: "4px",
+                  }}
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          )}
           {/* Settings Modal */}
           {showSettings && (
             <div
