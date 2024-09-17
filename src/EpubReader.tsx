@@ -1,7 +1,35 @@
-import React, { useRef, useState, useEffect } from "react";
+import React, { useRef, useState, useEffect, useCallback } from "react";
 import ePub, { Book, Rendition } from "epubjs";
 import { addEpub, getEpub, deleteEpub, getAllEpubs } from "./data/indexeddb"; // Import the IndexedDB functions
 import InlineView from "epubjs/lib/managers/views/inline";
+
+function getNextHref(currentHref, chapters) {
+  const currentIndex = chapters.findIndex(
+    (chapter) => chapter.href === currentHref
+  );
+
+  if (currentIndex !== -1) {
+    if (currentIndex < chapters.length - 1) {
+      return chapters[currentIndex + 1].href;
+    } else {
+      return chapters[currentIndex].href;
+    }
+  } else {
+    return chapters[0].href;
+  }
+}
+
+function getPrevHref(currentHref, chapters) {
+  const currentIndex = chapters.findIndex(
+    (chapter) => chapter.href === currentHref
+  );
+
+  if (currentIndex > 0) {
+    return chapters[currentIndex - 1].href;
+  } else {
+    return chapters[0].href;
+  }
+}
 
 const EpubReader: React.FC = () => {
   const viewerRef = useRef<HTMLDivElement>(null);
@@ -121,69 +149,44 @@ const EpubReader: React.FC = () => {
     localStorage.setItem("epub-reader-settings", JSON.stringify(settings));
   }, [bgColor, fontColor, fontSize, sidePadding]);
 
-  const nextChapter = () => {
-    if (!renditionRef.current) return;
-    const nextRef = getNextHref(
-      getCurrentChapter(),
-      renditionRef.current.book.navigation.toc
-    );
-    changeChapter(nextRef);
-  };
+  const getCurrentChapter = useCallback(() => {
+    const savedLocation = localStorage.getItem(`epub-location-${epubKey}`);
+    return savedLocation;
+  }, [epubKey]);
 
-  const prevChapter = () => {
+  const changeChapter = useCallback(
+    (chapter: string | null) => {
+      if (!renditionRef.current) return;
+      if (chapter) {
+        renditionRef.current.display(chapter);
+        localStorage.setItem(
+          `epub-location-${epubKey}`,
+          chapter ?? renditionRef.current.book.navigation.toc[0].href
+        );
+      } else {
+        renditionRef.current.display();
+      }
+    },
+    [epubKey]
+  );
+
+  const prevChapter = useCallback(() => {
     if (!renditionRef.current) return;
     const prevRef = getPrevHref(
       getCurrentChapter(),
       renditionRef.current.book.navigation.toc
     );
     changeChapter(prevRef);
-  };
+  }, [getCurrentChapter, changeChapter]);
 
-  function getNextHref(currentHref, chapters) {
-    const currentIndex = chapters.findIndex(
-      (chapter) => chapter.href === currentHref
-    );
-
-    if (currentIndex !== -1) {
-      if (currentIndex < chapters.length - 1) {
-        return chapters[currentIndex + 1].href;
-      } else {
-        return chapters[currentIndex].href;
-      }
-    } else {
-      return chapters[0].href;
-    }
-  }
-
-  function getPrevHref(currentHref, chapters) {
-    const currentIndex = chapters.findIndex(
-      (chapter) => chapter.href === currentHref
-    );
-
-    if (currentIndex > 0) {
-      return chapters[currentIndex - 1].href;
-    } else {
-      return chapters[0].href;
-    }
-  }
-
-  const getCurrentChapter = () => {
-    const savedLocation = localStorage.getItem(`epub-location-${epubKey}`);
-    return savedLocation;
-  };
-
-  const changeChapter = (chapter: string | null) => {
+  const nextChapter = useCallback(() => {
     if (!renditionRef.current) return;
-    if (chapter) {
-      renditionRef.current.display(chapter);
-      localStorage.setItem(
-        `epub-location-${epubKey}`,
-        chapter ?? renditionRef.current.book.navigation.toc[0].href
-      );
-    } else {
-      renditionRef.current.display();
-    }
-  };
+    const nextRef = getNextHref(
+      getCurrentChapter(),
+      renditionRef.current.book.navigation.toc
+    );
+    changeChapter(nextRef);
+  }, [getCurrentChapter, changeChapter]);
 
   const applyTheme = () => {
     if (renditionRef.current) {
@@ -320,6 +323,23 @@ const EpubReader: React.FC = () => {
     e.stopPropagation();
   };
 
+  // Add keyboard shortcuts for previous and next chapter
+  useEffect(() => {
+    const handleKeyDown = (event) => {
+      if (event.key === "ArrowLeft") {
+        prevChapter();
+      } else if (event.key === "ArrowRight") {
+        nextChapter();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [prevChapter, nextChapter]);
+
   return (
     <div
       style={{
@@ -418,7 +438,7 @@ const EpubReader: React.FC = () => {
               color: "#ffffff", // White text color
             }}
           >
-            <button onClick={prevChapter} style={navButtonStyle}>
+            <button id="prev" onClick={prevChapter} style={navButtonStyle}>
               Previous Chapter
             </button>
             <button
@@ -432,7 +452,7 @@ const EpubReader: React.FC = () => {
             >
               TOC
             </button>
-            <button onClick={nextChapter} style={navButtonStyle}>
+            <button id="next" onClick={nextChapter} style={navButtonStyle}>
               Next Chapter
             </button>
             <button
