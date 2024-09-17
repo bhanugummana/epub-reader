@@ -26,7 +26,7 @@ const EpubReader: React.FC = () => {
   // Ref to store the current chapter element
   const currentChapterRef = useRef<HTMLButtonElement | null>(null);
 
-  // Load stored settings on component mount
+  // Load stored settings and last opened EPUB on component mount
   useEffect(() => {
     // Retrieve settings from localStorage
     const storedSettings = localStorage.getItem("epub-reader-settings");
@@ -42,12 +42,27 @@ const EpubReader: React.FC = () => {
       setFontColor("#ffffff");
     }
 
-    loadStoredEpubs();
+    // Load stored EPUBs and the last opened EPUB
+    const initialize = async () => {
+      const epubs = await loadStoredEpubs(); // Load stored EPUBs
+
+      const lastEpubKey = localStorage.getItem("last-opened-epub");
+      if (lastEpubKey) {
+        // Check if the EPUB exists in stored EPUBs
+        const epubExists = epubs.some((epub) => epub.name === lastEpubKey);
+        if (epubExists) {
+          await loadEpub(lastEpubKey);
+        }
+      }
+    };
+
+    initialize();
   }, []);
 
   const loadStoredEpubs = async () => {
     const epubs = await getAllEpubs();
     setStoredEpubs(epubs);
+    return epubs; // Return the list of epubs
   };
 
   const loadEpubFromFile = async (file: File) => {
@@ -65,6 +80,9 @@ const EpubReader: React.FC = () => {
       const _book = ePub(epubData.data);
       setBook(_book);
       setEpubKey(fileName);
+
+      // Save the last opened EPUB to localStorage
+      localStorage.setItem("last-opened-epub", fileName);
     }
   };
 
@@ -81,7 +99,6 @@ const EpubReader: React.FC = () => {
 
       // Retrieve the saved location
       const savedLocation = localStorage.getItem(`epub-location-${epubKey}`);
-      console.log("🚀 ~ useEffect ~ savedLocation:", savedLocation);
 
       changeChapter(savedLocation);
 
@@ -110,7 +127,6 @@ const EpubReader: React.FC = () => {
       getCurrentChapter(),
       renditionRef.current.book.navigation.toc
     );
-    console.log("🚀 ~ nextChapter ~ nextRef:", nextRef);
     changeChapter(nextRef);
   };
 
@@ -231,11 +247,18 @@ const EpubReader: React.FC = () => {
 
   const handleDeleteEpub = async (fileName: string) => {
     await deleteEpub(fileName);
-    await loadStoredEpubs();
+    const epubs = await loadStoredEpubs();
     // If the deleted book is currently open, close it
     if (fileName === epubKey) {
       setBook(null);
       setEpubKey("");
+      // Remove last opened EPUB from localStorage
+      localStorage.removeItem("last-opened-epub");
+    }
+    // Check if last-opened-epub still exists
+    const lastEpubKey = localStorage.getItem("last-opened-epub");
+    if (lastEpubKey && !epubs.some((epub) => epub.name === lastEpubKey)) {
+      localStorage.removeItem("last-opened-epub");
     }
   };
 
@@ -422,6 +445,8 @@ const EpubReader: React.FC = () => {
               onClick={() => {
                 setBook(null);
                 setEpubKey("");
+                // Remove last opened EPUB from localStorage
+                localStorage.removeItem("last-opened-epub");
               }}
               style={navButtonStyle}
             >
