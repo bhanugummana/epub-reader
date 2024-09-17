@@ -54,6 +54,9 @@ const EpubReader: React.FC = () => {
   // Ref to store the current chapter element
   const currentChapterRef = useRef<HTMLButtonElement | null>(null);
 
+  // State for drag-and-drop
+  const [isDraggingOver, setIsDraggingOver] = useState<boolean>(false);
+
   // Load stored settings and last opened EPUB on component mount
   useEffect(() => {
     // Retrieve settings from localStorage
@@ -100,6 +103,7 @@ const EpubReader: React.FC = () => {
 
     // Load the EPUB
     loadEpub(file.name);
+    location.reload();
   };
 
   const loadEpub = async (fileName: string) => {
@@ -340,6 +344,60 @@ const EpubReader: React.FC = () => {
     };
   }, [prevChapter, nextChapter]);
 
+  // Drag-and-drop handlers attached to the document and viewer
+  useEffect(() => {
+    const handleDragOver = (e: DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      e.dataTransfer!.dropEffect = "copy";
+      setIsDraggingOver(true);
+    };
+
+    const handleDragEnter = (e: DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setIsDraggingOver(true);
+    };
+
+    const handleDragLeave = (e: DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setIsDraggingOver(false);
+    };
+
+    const handleDrop = (e: DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setIsDraggingOver(false);
+
+      const files = e.dataTransfer!.files;
+      if (files.length > 0) {
+        const file = files[0];
+        if (
+          file.type === "application/epub+zip" ||
+          file.name.endsWith(".epub")
+        ) {
+          loadEpubFromFile(file);
+        } else {
+          alert("Please drop a valid EPUB file.");
+        }
+      }
+    };
+
+    // Attach events to document during capturing phase
+    document.addEventListener("dragover", handleDragOver, true);
+    document.addEventListener("dragenter", handleDragEnter, true);
+    document.addEventListener("dragleave", handleDragLeave, true);
+    document.addEventListener("drop", handleDrop, true);
+
+    return () => {
+      document.removeEventListener("dragover", handleDragOver, true);
+      document.removeEventListener("dragenter", handleDragEnter, true);
+      document.removeEventListener("dragleave", handleDragLeave, true);
+      document.removeEventListener("drop", handleDrop, true);
+    };
+  }, [loadEpubFromFile]);
+
   return (
     <div
       style={{
@@ -347,10 +405,33 @@ const EpubReader: React.FC = () => {
         height: "100vh",
         margin: 0,
         overflow: "hidden",
-        backgroundColor: "#121212", // Dark background for the app
+        backgroundColor: "#121212",
         color: "#ffffff", // White text for the app
+        position: "relative",
       }}
     >
+      {/* Drag-and-Drop Overlay */}
+      {isDraggingOver && (
+        <div
+          style={{
+            position: "fixed", // Use fixed to cover the entire viewport
+            top: 0,
+            left: 0,
+            width: "100vw",
+            height: "100vh",
+            backgroundColor: "rgba(50, 50, 50, 0.9)",
+            color: "#fff",
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            fontSize: "24px",
+            zIndex: 1000,
+            pointerEvents: "none",
+          }}
+        >
+          Drop EPUB file here
+        </div>
+      )}
       {!book && (
         <div style={{ padding: "20px", fontFamily: "Arial, sans-serif" }}>
           <h2>EPUB Reader</h2>
