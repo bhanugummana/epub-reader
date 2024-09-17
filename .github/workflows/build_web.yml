@@ -32,7 +32,7 @@ jobs:
       - name: Store variables
         run: |
           touch .env
-          echo 'VITE_APP_GITHUB_BASE=/epub-reader' >> .env
+          echo 'REACT_APP_GITHUB_BASE=/epub-reader' >> .env
 
       - name: Build
         env:
