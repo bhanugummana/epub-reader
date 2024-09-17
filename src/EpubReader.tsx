@@ -57,6 +57,10 @@ const EpubReader: React.FC = () => {
   // State for drag-and-drop
   const [isDraggingOver, setIsDraggingOver] = useState<boolean>(false);
 
+  // State for current chapter index and total chapters
+  const [currentChapterIndex, setCurrentChapterIndex] = useState<number>(0);
+  const [totalChapters, setTotalChapters] = useState<number>(0);
+
   // Load stored settings and last opened EPUB on component mount
   useEffect(() => {
     // Retrieve settings from localStorage
@@ -170,9 +174,24 @@ const EpubReader: React.FC = () => {
       } else {
         renditionRef.current.display();
       }
+      setCurrentChapterIndexAndTotalChapters(chapter);
     },
     [epubKey]
   );
+
+  const setCurrentChapterIndexAndTotalChapters = (chapter: string | null) => {
+    if (!renditionRef.current) return;
+    if (!renditionRef.current.book.navigation?.toc) return;
+    setTotalChapters(renditionRef.current.book.navigation.toc.length);
+    if (chapter) {
+      const index = renditionRef.current.book.navigation.toc.findIndex(
+        (item) => item.href === chapter
+      );
+      setCurrentChapterIndex(index);
+    } else {
+      setCurrentChapterIndex(0);
+    }
+  };
 
   const prevChapter = useCallback(() => {
     if (!renditionRef.current) return;
@@ -504,6 +523,7 @@ const EpubReader: React.FC = () => {
             }}
           ></div>
           {/* Navigation Bar */}
+
           <div
             style={{
               position: "fixed",
@@ -514,14 +534,24 @@ const EpubReader: React.FC = () => {
               padding: "10px 0",
               borderTop: "1px solid #333",
               display: "flex",
-              justifyContent: "center",
+              justifyContent: "space-between",
               alignItems: "center",
               color: "#ffffff", // White text color
             }}
           >
+            <button
+              onClick={() => setShowSettings(true)}
+              style={navButtonStyle}
+            >
+              Settings
+            </button>
             <button id="prev" onClick={prevChapter} style={navButtonStyle}>
               Previous Chapter
             </button>
+            <div style={{ flexGrow: 1, textAlign: "center" }}>
+              {currentChapterIndex}/{totalChapters} (
+              {Math.round((currentChapterIndex / totalChapters) * 100)}%)
+            </div>
             <button
               onClick={() => {
                 if (renditionRef.current) {
@@ -535,12 +565,6 @@ const EpubReader: React.FC = () => {
             </button>
             <button id="next" onClick={nextChapter} style={navButtonStyle}>
               Next Chapter
-            </button>
-            <button
-              onClick={() => setShowSettings(true)}
-              style={navButtonStyle}
-            >
-              Settings
             </button>
             <button
               onClick={() => {
