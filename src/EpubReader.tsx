@@ -2,6 +2,7 @@ import React, { useRef, useState, useEffect, useCallback } from "react";
 import ePub, { Book, Rendition } from "epubjs";
 import { addEpub, getEpub, deleteEpub, getAllEpubs } from "./data/indexeddb"; // Import the IndexedDB functions
 import InlineView from "epubjs/lib/managers/views/inline";
+import { convertTxtToEpub } from "./txtToEpub";
 
 function getNextHref(currentHref, chapters) {
   const currentIndex = chapters.findIndex(
@@ -101,12 +102,26 @@ const EpubReader: React.FC = () => {
   };
 
   const loadEpubFromFile = async (file: File) => {
-    // Store the EPUB file in IndexedDB
-    await addEpub(file);
-    await loadStoredEpubs(); // Refresh the list
+    const fileExtension = file.name.split(".").pop()?.toLowerCase();
 
-    // Load the EPUB
-    loadEpub(file.name);
+    if (fileExtension === "txt") {
+      try {
+        const blob = await convertTxtToEpub(file, 1000, "");
+        const epubFile = new File(
+          [blob],
+          `${file.name.replace(".txt", "")}.epub`
+        );
+        await addEpub(epubFile);
+      } catch (error) {
+        console.error("Error converting TXT to EPUB:", error);
+        alert("Failed to convert TXT to EPUB.");
+      }
+    } else if (fileExtension === "epub") {
+      await addEpub(file);
+    }
+
+    await loadStoredEpubs(); // Refresh the list
+    loadEpub(file.name.replace(".txt", "")); // Load the EPUB
     location.reload();
   };
 
@@ -392,14 +407,14 @@ const EpubReader: React.FC = () => {
       const files = e.dataTransfer!.files;
       if (files.length > 0) {
         const file = files[0];
-        if (
-          file.type === "application/epub+zip" ||
-          file.name.endsWith(".epub")
-        ) {
-          loadEpubFromFile(file);
-        } else {
-          alert("Please drop a valid EPUB file.");
-        }
+        // if (
+        //   file.type === "application/epub+zip" ||
+        //   file.name.endsWith(".epub")
+        // ) {
+        loadEpubFromFile(file);
+        // } else {
+        //   alert("Please drop a valid EPUB file.");
+        // }
       }
     };
 
@@ -456,7 +471,7 @@ const EpubReader: React.FC = () => {
           <h2>EPUB Reader</h2>
           <input
             type="file"
-            accept=".epub"
+            accept=".epub,.txt"
             onChange={(e) => {
               const file = e.target.files?.[0];
               if (file) {
